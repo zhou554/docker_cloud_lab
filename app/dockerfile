@@ -1,0 +1,20 @@
+# 第一阶段：构建依赖
+FROM python:3.11-slim AS builder
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# 第二阶段：运行镜像
+FROM python:3.11-slim
+RUN groupadd -r appgroup && useradd -r -m -g appgroup appuser
+WORKDIR /app
+COPY --from=builder --chown=appuser:appgroup /root/.local /home/appuser/.local
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    HOME=/home/appuser \
+    PYTHONUNBUFFERED=1
+COPY --chown=appuser:appgroup . .
+USER appuser
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
