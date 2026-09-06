@@ -1,0 +1,7 @@
+# 构建上下文忽略列表：docker build 时不会把这些打进上下文 / COPY
+# 减小上传体积，也避免把密钥、缓存、无关文件拷进镜像
+__pycache__/
+*.pyc
+.env
+.venv/
+*.log

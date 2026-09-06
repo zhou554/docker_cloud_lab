@@ -1,0 +1,20 @@
+# 环境与密钥
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 测试 / 类型检查缓存
+.pytest_cache/
+.mypy_cache/
+
+# 日志与编辑器
+*.log
+.idea/
+.vscode/
