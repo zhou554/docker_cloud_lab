@@ -1,6 +1,6 @@
 # docker_cloud_lab
 
-Docker / Compose 实验项目：将 FastAPI 短链服务与 MySQL、Redis 编排为可本地一键启动的多容器栈。
+同一仓库内的云原生实验项目：用 Docker Compose 与 Kubernetes 两种方式部署 **FastAPI 短链服务 + MySQL + Redis**。
 
 ---
 
@@ -26,7 +26,9 @@ Docker / Compose 实验项目：将 FastAPI 短链服务与 MySQL、Redis 编排
 
 ### 本 README 的范围
 
-本文档只覆盖 **Docker 部分**：架构、Dockerfile、容器通信、Volume、启动方式与常见故障。业务实现细节以 `app/main.py` 为准。
+- **第 2–7 节**：Docker / Compose（架构、Dockerfile、通信、Volume、启动、故障）
+- **第 8 节**：Kubernetes 部署（Docker Desktop）
+- 业务实现细节以 `app/main.py` 为准。
 
 ---
 
@@ -220,4 +222,124 @@ docker compose -f docker_compose.yaml down -v   # 同时删卷（慎用）
 docker compose -f docker_compose.yaml logs -f api
 docker compose -f docker_compose.yaml logs -f mysql
 docker compose -f docker_compose.yaml logs -f redis
+```
+
+---
+
+## 8. Kubernetes 部署（Docker Desktop）
+
+同一业务栈可用 `k8s/` 目录下的清单部署到 **Docker Desktop 自带 Kubernetes**。Compose 文件保留，两种部署方式并存。
+
+### 8.1 Compose ↔ Kubernetes 对照
+
+| Compose | Kubernetes |
+|---------|------------|
+| 服务名 `mysql` / `redis` / `api` | 同名 Service（集群内 DNS） |
+| `.env` 环境变量 | ConfigMap + Secret |
+| `mysql_data` / `redis_data` | PVC `mysql-data` / `redis-data` |
+| `healthcheck` + `depends_on` | readiness / liveness Probe；api 仍有 lifespan 重试 |
+| `8000:8000` | api Service 类型 `LoadBalancer`，端口 8000 |
+
+Namespace：`cloudlab`。
+
+### 8.2 目录说明
+
+```text
+k8s/
+  namespace.yaml
+  configmap.yaml
+  secret.yaml.example     # 可提交；复制为 secret.yaml 后填真实密码
+  mysql-pvc.yaml
+  mysql-deployment.yaml
+  mysql-service.yaml
+  redis-pvc.yaml
+  redis-deployment.yaml
+  redis-service.yaml
+  api-deployment.yaml
+  api-service.yaml
+  kustomization.yaml      # kubectl apply -k k8s/（不含 Secret）
+```
+
+### 8.3 前置条件
+
+1. Docker Desktop → Settings → Kubernetes → **Enable Kubernetes**，等待就绪。
+2. 确认集群可用：
+
+```powershell
+kubectl cluster-info
+kubectl get nodes
+```
+
+3. 构建 api 本地镜像（Desktop 与 Docker 引擎共享镜像，`imagePullPolicy: IfNotPresent`）：
+
+```powershell
+docker build -t docker_cloud_lab:1.0 ./app
+```
+
+### 8.4 准备 Secret（勿提交）
+
+```powershell
+copy k8s\secret.yaml.example k8s\secret.yaml
+# 编辑 k8s\secret.yaml，将 DB_PASSWORD 改为实际密码
+```
+
+`k8s/secret.yaml` 已在 `.gitignore` 中，不要推送到 Git。
+
+也可不用文件，直接创建：
+
+```powershell
+kubectl create namespace cloudlab --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n cloudlab create secret generic cloudlab-secret --from-literal=DB_PASSWORD=change_me
+```
+
+### 8.5 部署
+
+```powershell
+# 先应用 Secret
+kubectl apply -f k8s/secret.yaml
+
+# 再应用其余资源（含 Namespace、ConfigMap、MySQL、Redis、API）
+kubectl apply -k k8s/
+```
+
+若尚未创建 `secret.yaml`，不要跳过 Secret 步骤，否则 MySQL / api Pod 会因缺少 `cloudlab-secret` 起不来。
+
+### 8.6 验证
+
+```powershell
+kubectl -n cloudlab get pods,svc,pvc
+kubectl -n cloudlab logs -l app=api --tail=50
+curl.exe http://localhost:8000/health
+```
+
+浏览器：http://localhost:8000/ 、http://localhost:8000/docs  
+
+Docker Desktop 上 LoadBalancer 通常会把 `api` 的 8000 映射到本机 `localhost:8000`。若 Compose 栈仍占用 8000，请先 `docker compose -f docker_compose.yaml down` 再测 K8s。
+
+### 8.7 删除
+
+```powershell
+kubectl delete -k k8s/
+kubectl delete -f k8s/secret.yaml
+# 若需一并删除 PVC 数据（会清空 MySQL/Redis 持久化）：
+kubectl -n cloudlab delete pvc --all
+kubectl delete namespace cloudlab
+```
+
+### 8.8 Kubernetes 常见故障
+
+| 现象 | 可能原因 | 处理建议 |
+|------|----------|----------|
+| api `ImagePullBackOff` / `ErrImageNeverPull` | 本地没有 `docker_cloud_lab:1.0` | 执行 `docker build -t docker_cloud_lab:1.0 ./app`；确认 `imagePullPolicy: IfNotPresent` |
+| Pod `CreateContainerConfigError` | 未创建 Secret | `kubectl apply -f k8s/secret.yaml` 或 `create secret` |
+| PVC 一直 Pending | 存储类/集群未就绪 | `kubectl get storageclass`；确认 Desktop Kubernetes 已 Running |
+| `/health` 503 或 api 未 Ready | MySQL/Redis 未就绪或密码不一致 | `kubectl -n cloudlab get pods`；`logs -l app=mysql`；核对 Secret 与首次初始化密码 |
+| 本机 8000 访问失败 | Compose 与 K8s 争用端口，或 LB 未分配 | 停掉 Compose；`kubectl -n cloudlab get svc api` 查看 EXTERNAL-IP / PORTS |
+| 改 Secret 后仍用旧密码连库 | PVC 内 MySQL 已按旧密码初始化 | 开发环境可删 PVC/Namespace 后重建（会丢数据） |
+
+查看资源与事件：
+
+```powershell
+kubectl -n cloudlab describe pod -l app=api
+kubectl -n cloudlab get events --sort-by='.lastTimestamp'
 ```
