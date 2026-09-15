@@ -12,4 +12,7 @@ resources:
   - redis-service.yaml
   - api-deployment.yaml
   - api-service.yaml
-# Secret 不含在此：请先 apply secret.yaml（由 secret.yaml.example 复制）
+# Secret 不含在此。部署顺序：
+#   kubectl apply -f k8s/namespace.yaml
+#   kubectl apply -f k8s/secret.yaml
+#   kubectl apply -k k8s/

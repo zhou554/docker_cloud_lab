@@ -1,3 +1,5 @@
+# 本机 Docker Desktop：BASE_URL 用 localhost + NodePort（见 README 8.6）。
+# 云上公网：请用 configmap.cloud.example.yaml 或 patch BASE_URL（README 第 9 节）。
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -5,7 +7,7 @@ metadata:
   namespace: cloudlab
 data:
   APP_NAME: docker-cloud-lab
-  BASE_URL: http://localhost:8000
+  BASE_URL: http://localhost:30080
   DEBUG: "false"
   DB_HOST: mysql
   DB_PORT: "3306"

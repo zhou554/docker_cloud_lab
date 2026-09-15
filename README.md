@@ -27,7 +27,8 @@
 ### 本 README 的范围
 
 - **第 2–7 节**：Docker / Compose（架构、Dockerfile、通信、Volume、启动、故障）
-- **第 8 节**：Kubernetes 部署（Docker Desktop）
+- **第 8 节**：Kubernetes 部署（本机 Docker Desktop）
+- **第 9 节**：Kubernetes 部署（阿里云 k3s 多节点）
 - 业务实现细节以 `app/main.py` 为准。
 
 ---
@@ -238,7 +239,7 @@ docker compose -f docker_compose.yaml logs -f redis
 | `.env` 环境变量 | ConfigMap + Secret |
 | `mysql_data` / `redis_data` | PVC `mysql-data` / `redis-data` |
 | `healthcheck` + `depends_on` | readiness / liveness Probe；api 仍有 lifespan 重试 |
-| `8000:8000` | api Service 类型 `LoadBalancer`，端口 8000 |
+| `8000:8000` | api Service 类型 `NodePort`，集群端口 8000，固定 `nodePort: 30080` |
 
 Namespace：`cloudlab`。
 
@@ -247,8 +248,9 @@ Namespace：`cloudlab`。
 ```text
 k8s/
   namespace.yaml
-  configmap.yaml
-  secret.yaml.example     # 可提交；复制为 secret.yaml 后填真实密码
+  configmap.yaml              # 本机 BASE_URL=localhost:30080
+  configmap.cloud.example.yaml # 云上 BASE_URL 模板（复制为 configmap.cloud.yaml）
+  secret.yaml.example         # 复制为 secret.yaml 后填真实密码
   mysql-pvc.yaml
   mysql-deployment.yaml
   mysql-service.yaml
@@ -285,20 +287,18 @@ copy k8s\secret.yaml.example k8s\secret.yaml
 
 `k8s/secret.yaml` 已在 `.gitignore` 中，不要推送到 Git。
 
-也可不用文件，直接创建：
+也可不用文件，直接创建（仍需 **先** 创建 Namespace）：
 
 ```powershell
-kubectl create namespace cloudlab --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f k8s/namespace.yaml
 kubectl -n cloudlab create secret generic cloudlab-secret --from-literal=DB_PASSWORD=change_me
 ```
 
 ### 8.5 部署
 
 ```powershell
-# 先应用 Secret
+kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/secret.yaml
-
-# 再应用其余资源（含 Namespace、ConfigMap、MySQL、Redis、API）
 kubectl apply -k k8s/
 ```
 
@@ -309,12 +309,12 @@ kubectl apply -k k8s/
 ```powershell
 kubectl -n cloudlab get pods,svc,pvc
 kubectl -n cloudlab logs -l app=api --tail=50
-curl.exe http://localhost:8000/health
+curl.exe http://localhost:30080/health
 ```
 
-浏览器：http://localhost:8000/ 、http://localhost:8000/docs  
+浏览器：http://localhost:30080/ 、http://localhost:30080/docs  
 
-Docker Desktop 上 LoadBalancer 通常会把 `api` 的 8000 映射到本机 `localhost:8000`。若 Compose 栈仍占用 8000，请先 `docker compose -f docker_compose.yaml down` 再测 K8s。
+清单固定 **NodePort 30080**（与 Compose 的 8000 不冲突）。若 PVC `Pending` 且集群无 `local-path` 存储类（部分 Desktop 环境），可暂时去掉 `mysql-pvc.yaml` / `redis-pvc.yaml` 中的 `storageClassName: local-path` 行后重试。
 
 ### 8.7 删除
 
@@ -334,7 +334,7 @@ kubectl delete namespace cloudlab
 | Pod `CreateContainerConfigError` | 未创建 Secret | `kubectl apply -f k8s/secret.yaml` 或 `create secret` |
 | PVC 一直 Pending | 存储类/集群未就绪 | `kubectl get storageclass`；确认 Desktop Kubernetes 已 Running |
 | `/health` 503 或 api 未 Ready | MySQL/Redis 未就绪或密码不一致 | `kubectl -n cloudlab get pods`；`logs -l app=mysql`；核对 Secret 与首次初始化密码 |
-| 本机 8000 访问失败 | Compose 与 K8s 争用端口，或 LB 未分配 | 停掉 Compose；`kubectl -n cloudlab get svc api` 查看 EXTERNAL-IP / PORTS |
+| 本机 30080 访问失败 | NodePort 未就绪或防火墙 | `kubectl -n cloudlab get svc api` 确认 `8000:30080/TCP`；节点防火墙放行 30080 |
 | 改 Secret 后仍用旧密码连库 | PVC 内 MySQL 已按旧密码初始化 | 开发环境可删 PVC/Namespace 后重建（会丢数据） |
 
 查看资源与事件：
@@ -343,3 +343,74 @@ kubectl delete namespace cloudlab
 kubectl -n cloudlab describe pod -l app=api
 kubectl -n cloudlab get events --sort-by='.lastTimestamp'
 ```
+
+---
+
+## 9. Kubernetes 部署（阿里云 k3s 多节点）
+
+清单默认按 **k3s**（`local-path` 存储类、api **NodePort 30080**）编写。镜像仓库（ACR）与 worker 内网拉镜像见下文「镜像」；可先用手工导入镜像完成首次部署。
+
+### 9.1 前置条件
+
+- 1 台 master（建议有公网 SSH）+ 若干 worker，同一 VPC；`kubectl get nodes` 全部 **Ready**。
+- 在 **master** 上使用 kubeconfig：
+
+```bash
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+git clone https://github.com/zhou554/docker_cloud_lab.git
+cd docker_cloud_lab
+```
+
+### 9.2 Secret 与清单
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+cp k8s/secret.yaml.example k8s/secret.yaml
+# 编辑 k8s/secret.yaml，设置 DB_PASSWORD（首次初始化 MySQL 后勿随意改 Secret）
+kubectl apply -f k8s/secret.yaml
+kubectl apply -k k8s/
+kubectl -n cloudlab get pods,svc,pvc -w
+```
+
+### 9.3 BASE_URL（短链对外地址）
+
+ConfigMap 默认适合本机 `localhost:30080`。云上需改为 `http://<master公网IP>:30080`（当前为 HTTP；上 HTTPS/Ingress 后再改 URL）。
+
+任选其一：
+
+```bash
+# 方式 A：patch（推荐，无需额外文件）
+kubectl -n cloudlab patch configmap cloudlab-config --type merge \
+  -p '{"data":{"BASE_URL":"http://118.31.68.235:30080"}}'
+kubectl -n cloudlab rollout restart deployment/api
+
+# 方式 B：复制 configmap.cloud.example.yaml → configmap.cloud.yaml，改 PUBLIC_IP 后 apply + restart api
+```
+
+### 9.4 外网访问与安全组
+
+- Service 已固定 **nodePort: 30080**；在 **master 安全组** 入方向放行 **TCP 30080**（来源建议为你的公网 IP/32）。
+- 验证：`curl http://<master公网IP>:30080/health`
+
+### 9.5 镜像（暂未接 ACR 时）
+
+清单中 api 仍为 `docker_cloud_lab:1.0`、`imagePullPolicy: IfNotPresent`。k3s 使用 containerd，需保证 **调度到该 Pod 的节点** 上已有镜像，例如：
+
+- 在 master `docker build` 后 `docker save`，各节点 `k3s ctr images import`；或
+- 推送 ACR 后 `kubectl set image deployment/api -n cloudlab api=<ACR 完整地址>`（worker 需能 pull，常配合 VPC 内网访问 ACR 或 NAT）。
+
+MySQL / Redis 使用公共镜像名，worker 无公网时需同样解决出网或预拉取。
+
+### 9.6 多节点与释放后重建
+
+- `kubectl -n cloudlab scale deployment api --replicas=3` 后 `get pods -o wide` 可查看跨节点调度。
+- **释放 ECS 再开新机器**：nodePort **30080** 不变（清单写死）；**公网 IP 与 BASE_URL 需重新 patch**；Secret、PVC 数据需重新部署（除非另行保留云盘）。
+
+### 9.7 常见故障（云上补充）
+
+| 现象 | 可能原因 | 处理建议 |
+|------|----------|----------|
+| `namespaces "cloudlab" not found` | 先 apply Secret | 先 `kubectl apply -f k8s/namespace.yaml` |
+| api `ImagePullBackOff` on worker | 节点无镜像 / 无出网 | 各节点 import 或 ACR + 内网 pull |
+| 公网 curl 超时 | 安全组未放行 30080 | 阿里云安全组入方向添加规则 |
+| 短链仍是 localhost | BASE_URL 未改或未重启 api | patch ConfigMap + `rollout restart deployment/api` |

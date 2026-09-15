@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 k8s/secret.yaml
+k8s/configmap.cloud.yaml
 
 # Python
 __pycache__/

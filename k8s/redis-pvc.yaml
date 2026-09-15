@@ -4,6 +4,7 @@ metadata:
   name: redis-data
   namespace: cloudlab
 spec:
+  storageClassName: local-path
   accessModes:
     - ReadWriteOnce
   resources:

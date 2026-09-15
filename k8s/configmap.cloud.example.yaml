@@ -1,0 +1,24 @@
+# 阿里云 k3s 等公网访问：复制为 configmap.cloud.yaml，将 PUBLIC_IP 改为 master 公网 IP 后 apply。
+# 勿提交含真实 IP 的文件；也可不建文件，仅用 kubectl patch（见 README 第 9 节）。
+#
+#   cp k8s/configmap.cloud.example.yaml k8s/configmap.cloud.yaml
+#   vim k8s/configmap.cloud.yaml
+#   kubectl apply -f k8s/configmap.cloud.yaml
+#   kubectl -n cloudlab rollout restart deployment/api
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudlab-config
+  namespace: cloudlab
+data:
+  APP_NAME: docker-cloud-lab
+  BASE_URL: http://PUBLIC_IP:30080
+  DEBUG: "false"
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_USER: root
+  DB_NAME: cloudlab
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
