@@ -2,7 +2,7 @@
 
 同一仓库内的云原生实验项目：用 Docker Compose 与 Kubernetes 部署 FastAPI 短链服务 + MySQL + Redis。
 
-国内网络环境：本机仅用 Compose 联调（第 6–7 节）；K8s 业务栈、CI/CD、Prometheus/Grafana 告警均在阿里云 k3s 完成（第 9–10 节）。**不做本机 K8s 验证**（第 8 节 minikube / WSL 可整节跳过），直接在多节点 k3s 上 apply 同一套 k8s/、monitoring/ 清单即可。
+国内网络环境：本机仅用 Compose 联调（第 6–7 节）；K8s 业务栈、CI/CD、Prometheus/Grafana 告警均在阿里云 k3s 完成（第 9–10 节）。**不做本机 K8s 验证**（第 8 节 minikube / WSL 可整节跳过），直接在多节点 k3s 上 apply 同一套 k8s/、monitoring/ 清单。
 
 ## 1. 项目描述
 
