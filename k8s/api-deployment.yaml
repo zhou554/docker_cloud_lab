@@ -19,6 +19,8 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
+      imagePullSecrets:
+        - name: acr-pull
       containers:
         - name: api
           # 默认本地 tag；接 ACR 后: tools/cloud/set-api-image-acr.sh
