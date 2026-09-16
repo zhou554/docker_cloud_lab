@@ -1,5 +1,5 @@
 # 阿里云 k3s 等公网访问：复制为 configmap.cloud.yaml，将 PUBLIC_IP 改为 master 公网 IP 后 apply。
-# 勿提交含真实 IP 的文件；也可不建文件，仅用 kubectl patch（见 README 第 9 节）。
+# 勿提交含真实 IP 的文件；也可不建文件，用 PUBLIC_IP=... bash tools/cloud/patch-base-url.sh
 #
 #   cp k8s/configmap.cloud.example.yaml k8s/configmap.cloud.yaml
 #   vim k8s/configmap.cloud.yaml

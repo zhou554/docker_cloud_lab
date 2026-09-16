@@ -4,6 +4,9 @@
 .env.*.local
 k8s/secret.yaml
 k8s/configmap.cloud.yaml
+k8s/acr-pull-secret.yaml
+k8s-images.tar
+api-image.tar.gz
 
 # Python
 __pycache__/

@@ -5,7 +5,4 @@ pymysql==1.1.0
 cryptography==41.0.7
 redis==5.0.1
 pydantic==2.5.0
-# ═══════════════════════════════════════
-# 第6周预留：接入 Prometheus 监控时取消注释
-# prometheus-client==0.19.0
-# ═══════════════════════════════════════
+prometheus-client==0.21.0

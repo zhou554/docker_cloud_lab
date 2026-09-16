@@ -12,7 +12,4 @@ resources:
   - redis-service.yaml
   - api-deployment.yaml
   - api-service.yaml
-# Secret 不含在此。部署顺序：
-#   kubectl apply -f k8s/namespace.yaml
-#   kubectl apply -f k8s/secret.yaml
-#   kubectl apply -k k8s/
+# Secret 不含在此。云上部署见仓库 README 第 9 节或 bash tools/cloud/deploy-business.sh

@@ -1,0 +1,41 @@
+# 复制为 build-push-acr.yml 并配置 GitHub Secrets：
+#   ACR_REGISTRY   例 registry.cn-hangzhou.aliyuncs.com
+#   ACR_NAMESPACE  例 cloudlab
+#   ACR_USERNAME   阿里云 ACR 用户名
+#   ACR_PASSWORD   阿里云 ACR 密码
+#
+# 推送后在 k3s master 执行：
+#   API_IMAGE=<registry>/<ns>/api:<sha> bash tools/cloud/set-api-image-acr.sh
+
+name: build-push-acr
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "app/dockerfile"
+      - ".github/workflows/build-push-acr.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login ACR
+        run: |
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login \
+            "${{ secrets.ACR_REGISTRY }}" \
+            -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+
+      - name: Build and push api
+        env:
+          REG: ${{ secrets.ACR_REGISTRY }}
+          NS: ${{ secrets.ACR_NAMESPACE }}
+          TAG: ${{ github.sha }}
+        run: |
+          IMAGE="${REG}/${NS}/api:${TAG}"
+          docker build -t "$IMAGE" -f app/dockerfile ./app
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE — 在集群 set-image 或更新 API_IMAGE"

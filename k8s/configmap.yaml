@@ -1,5 +1,5 @@
-# 本机 Docker Desktop：BASE_URL 用 localhost + NodePort（见 README 8.6）。
-# 云上公网：请用 configmap.cloud.example.yaml 或 patch BASE_URL（README 第 9 节）。
+# 部署后必须改为公网地址：PUBLIC_IP=x.x.x.x bash tools/cloud/patch-base-url.sh
+# 或复制 configmap.cloud.example.yaml → configmap.cloud.yaml 后 apply
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,7 +7,7 @@ metadata:
   namespace: cloudlab
 data:
   APP_NAME: docker-cloud-lab
-  BASE_URL: http://localhost:30080
+  BASE_URL: http://REPLACE_WITH_PUBLIC_IP:30080
   DEBUG: "false"
   DB_HOST: mysql
   DB_PORT: "3306"

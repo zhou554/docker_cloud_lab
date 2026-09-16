@@ -4,7 +4,7 @@ metadata:
   name: mysql-data
   namespace: cloudlab
 spec:
-  storageClassName: local-path
+  # 不写死存储类：走集群默认（minikube 为 standard，k3s 为 local-path）
   accessModes:
     - ReadWriteOnce
   resources:

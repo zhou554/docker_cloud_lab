@@ -1,0 +1,17 @@
+# 云上 k3s：bash tools/cloud/deploy-monitoring.sh（README 第 10 节）
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - namespace.yaml
+  - prometheus-rbac.yaml
+  - prometheus-config.yaml
+  - prometheus.yaml
+  - node-exporter.yaml
+  - grafana.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: grafana-dashboards
+    files:
+      - cloudlab-overview.json=grafana-dashboard.json

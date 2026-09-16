@@ -14,9 +14,14 @@ spec:
     metadata:
       labels:
         app: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: api
+          # 默认本地 tag；接 ACR 后: tools/cloud/set-api-image-acr.sh
           image: docker_cloud_lab:1.0
           imagePullPolicy: IfNotPresent
           ports:

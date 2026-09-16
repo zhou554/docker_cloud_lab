@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   api:
-    build: ./app
+    build:
+      context: ./app
+      dockerfile: dockerfile
     container_name: cloudlab_api
     ports:
       - "8000:8000"

@@ -7,7 +7,8 @@ import hashlib
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 from pydantic import BaseModel, HttpUrl, field_validator
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, text
 from sqlalchemy.exc import IntegrityError
@@ -155,6 +156,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+APP_UP = Gauge("app_up", "1 if overall /health is ok else 0")
+MYSQL_UP = Gauge("mysql_up", "1 if MySQL SELECT 1 succeeds else 0")
+REDIS_UP = Gauge("redis_up", "1 if Redis PING succeeds else 0")
+
 # 健康检查
 @app.get("/health")
 def health_check():
@@ -164,15 +169,20 @@ def health_check():
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         checks["mysql"] = "ok"
+        MYSQL_UP.set(1)
     except Exception as e:
         checks["mysql"] = f"error: {str(e)}"
         status_code = 503
+        MYSQL_UP.set(0)
     try:
         redis_client.ping()
         checks["redis"] = "ok"
+        REDIS_UP.set(1)
     except Exception as e:
         checks["redis"] = f"error: {str(e)}"
         status_code = 503
+        REDIS_UP.set(0)
+    APP_UP.set(1 if status_code == 200 else 0)
     return JSONResponse(
         status_code=status_code,
         content={
@@ -181,6 +191,11 @@ def health_check():
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     )
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # 业务接口
 @app.get("/")
@@ -191,6 +206,7 @@ def root():
         "endpoints": {
             "docs": "/docs",
             "health": "/health",
+            "metrics": "/metrics",
             "create_link": "POST /links/",
             "redirect": "GET /{short_code}",
             "stats": "GET /links/{short_code}/stats"
