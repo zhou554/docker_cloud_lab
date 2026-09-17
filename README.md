@@ -375,7 +375,9 @@ kubectl apply -k monitoring/
 | `ACR_NAMESPACE` | `zhou554_cloudlab` |
 | `ACR_USERNAME` / `ACR_PASSWORD` | ACR 登录凭证 |
 
-推送 `app/` 变更后 CI 构建并 push `.../zhou554_cloudlab/api:<git-sha>`。
+推送 `app/` 变更后 CI 构建并 push `.../zhou554_cloudlab/api:<git-sha>`。一次成功构建见 `docs/screenshots/CI_shot.png`：
+
+![GitHub Actions 构建并推送 ACR](docs/screenshots/CI_shot.png)
 
 **发版更新 api（CD 可自动化此步）**
 
@@ -480,24 +482,39 @@ echo "Grafana:    http://${PUBLIC_IP}:30300"
 1. `kubectl -n monitoring get pods` 全部 Running
 2. Prometheus → Status → Targets：`cloudlab-api` 为 UP — `http://<公网IP>:30090/targets`
 3. Grafana → Dashboards → CloudLab Overview：`app_up` / `mysql_up` / `redis_up` 为 1 — `http://<公网IP>:30300`
-4. （可选告警）临时停 MySQL，约 1 分钟后 Alerts 为 FIRING，截完立刻恢复：
+4. （可选告警）临时缩容 api 或 mysql，约 1 分钟后 Alerts 为 FIRING，截完立刻恢复：
 
 ```bash
-kubectl -n cloudlab scale deployment/mysql --replicas=0
+kubectl -n cloudlab scale deployment/api --replicas=0
 # 截图 http://<公网IP>:30090/alerts
-kubectl -n cloudlab scale deployment/mysql --replicas=1
+kubectl -n cloudlab scale deployment/api --replicas=1
 ```
 
-将截图保存到 `docs/screenshots/`（**勿提交密钥**），建议文件名：
+下列截图已归档到 `docs/screenshots/`（**勿提交密钥 / ACR 密码**）。入口：`http://<公网IP>:30090` / `:30300`（勿用 localhost）。
 
 | 文件 | 内容 |
 |------|------|
-| `01-prometheus-targets.png` | Targets 中 `cloudlab-api` 为 UP |
-| `02-prometheus-alerts.png` | Alerts 页面（可选） |
-| `03-grafana-overview.png` | CloudLab Overview 看板 |
-| `04-alert-firing.png` | MySQL 缩容后告警 FIRING（可选） |
+| `01-prometheus-targets.png` | Targets：`cloudlab-api` 与 3 台 `node-exporter` 均为 UP |
+| `02-prometheus-alerts.png` | Alerts 规则存在且健康时为 inactive |
+| `03-grafana-overview.png` | CloudLab Overview：`app_up` / `mysql_up` / `redis_up` / `api scrape up` 为 1 |
+| `04-alert-firing.png` | 缩容 api 后 `CloudlabApiDown` FIRING |
+| `CI_shot.png` | GitHub Actions 构建并 push ACR 成功 |
 
-入口：`http://<公网IP>:30090` / `:30300`（勿用 localhost）。
+**Prometheus Targets**
+
+![Prometheus Targets](docs/screenshots/01-prometheus-targets.png)
+
+**Prometheus Alerts（健康）**
+
+![Prometheus Alerts inactive](docs/screenshots/02-prometheus-alerts.png)
+
+**Grafana CloudLab Overview**
+
+![Grafana CloudLab Overview](docs/screenshots/03-grafana-overview.png)
+
+**告警 FIRING**
+
+![CloudlabApiDown FIRING](docs/screenshots/04-alert-firing.png)
 
 ### 10.4 卸载监控
 
@@ -527,7 +544,7 @@ docker_cloud_lab/
   monitoring/             # Prometheus、Grafana、告警规则
   tools/cloud/            # 云上部署脚本（在 master 执行）
   tools/optional-local-minikube/  # 可选本机 minikube（默认不用）
-  docs/screenshots/       # 监控截图归档（.gitkeep）
+  docs/screenshots/       # 云上监控 / CI 截图（见 README 10.3）
   .github/workflows/      # CI 示例 build-push-acr.yml.example
   docker_compose.yaml     # 本机联调
   .env.example            # Compose 环境变量模板
