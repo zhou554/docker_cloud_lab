@@ -23,8 +23,8 @@ spec:
         - name: acr-pull
       containers:
         - name: api
-          # 默认本地 tag；接 ACR 后: tools/cloud/set-api-image-acr.sh
-          image: docker_cloud_lab:1.0
+          # ACR VPC 镜像；发版更新 tag 见 README 9.5（kubectl set image 或改本行）
+          image: crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/api:e2aaf6c8191b852d742b88ef3f613d39b16b432b
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

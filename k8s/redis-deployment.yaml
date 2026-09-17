@@ -15,9 +15,11 @@ spec:
       labels:
         app: redis
     spec:
+      imagePullSecrets:
+        - name: acr-pull
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/redis:7-alpine
           command: ["redis-server", "--appendonly", "yes"]
           ports:
             - containerPort: 6379

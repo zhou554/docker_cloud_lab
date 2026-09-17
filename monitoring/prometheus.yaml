@@ -18,7 +18,7 @@ spec:
       serviceAccountName: prometheus
       containers:
         - name: prometheus
-          image: prom/prometheus:v2.54.1
+          image: crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/prometheus:v2.54.1
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus

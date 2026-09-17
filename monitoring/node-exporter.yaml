@@ -14,11 +14,13 @@ spec:
       labels:
         app: node-exporter
     spec:
+      imagePullSecrets:
+        - name: acr-pull
       hostNetwork: true
       hostPID: true
       containers:
         - name: node-exporter
-          image: prom/node-exporter:v1.8.2
+          image: crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/node-exporter:v1.8.2
           args:
             - --path.procfs=/host/proc
             - --path.sysfs=/host/sys

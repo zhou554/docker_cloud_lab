@@ -1,11 +1,16 @@
-# 复制为 build-push-acr.yml 并配置 GitHub Secrets：
-#   ACR_REGISTRY   例 registry.cn-hangzhou.aliyuncs.com
-#   ACR_NAMESPACE  例 cloudlab
-#   ACR_USERNAME   阿里云 ACR 用户名
-#   ACR_PASSWORD   阿里云 ACR 密码
+# 复制为 build-push-acr.yml 并配置 GitHub Secrets（个人版 ACR 示例，push 用公网域名）：
+#   ACR_REGISTRY   crpi-6zjjswgvnui3es9q.cn-hangzhou.personal.cr.aliyuncs.com
+#   ACR_NAMESPACE  zhou554_cloudlab
+#   ACR_USERNAME   阿里云 ACR 登录用户名
+#   ACR_PASSWORD   阿里云 ACR 登录密码
 #
-# 推送后在 k3s master 执行：
-#   API_IMAGE=<registry>/<ns>/api:<sha> bash tools/cloud/set-api-image-acr.sh
+# 集群内 pull 使用 VPC 域名（与 k8s/*、monitoring/* 中 image 一致）：
+#   crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/api:<tag>
+#
+# CI 只构建推送 api。推送后在 k3s master 更新 tag（任选其一）：
+#   kubectl -n cloudlab set image deployment/api \
+#     api=crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com/zhou554_cloudlab/api:<git-sha>
+#   或修改 k8s/api-deployment.yaml 中 api 的 tag 后 git pull && kubectl apply -k k8s/
 
 name: build-push-acr
 
@@ -38,4 +43,4 @@ jobs:
           IMAGE="${REG}/${NS}/api:${TAG}"
           docker build -t "$IMAGE" -f app/dockerfile ./app
           docker push "$IMAGE"
-          echo "Pushed $IMAGE — 在集群 set-image 或更新 API_IMAGE"
+          echo "Pushed $IMAGE — 在 master 上对 deployment/api 执行 kubectl set image（见 workflow 顶部注释）"

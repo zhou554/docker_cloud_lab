@@ -250,7 +250,7 @@ Namespace：`cloudlab`。
 1. `kubectl apply -f k8s/namespace.yaml`
 2. `cp k8s/secret.yaml.example k8s/secret.yaml` 并编辑 → `kubectl apply -f k8s/secret.yaml`
 3. `kubectl apply -k k8s/`（不含 Secret；也可 `bash tools/cloud/deploy-business.sh`）
-4. 各节点具备 api 镜像（import 或 ACR），见 9.5
+4. 节点 ACR 与 `acr-pull` Secret，见 9.5
 5. `PUBLIC_IP=<公网IP> bash tools/cloud/patch-base-url.sh`
 
 ```text
@@ -278,12 +278,12 @@ tools/cloud/                     # 部署脚本
 |------|------|
 | 1 | k3s 多节点 Ready，克隆仓库，`export KUBECONFIG=/etc/rancher/k3s/k3s.yaml` |
 | 2 | 准备 `k8s/secret.yaml` → `bash tools/cloud/deploy-business.sh` |
-| 3 | api 镜像：`build-api-image.sh` + 各节点 `import-api-on-node.sh`，或 ACR + CI（9.5） |
+| 3 | 节点 ACR（pause + registries）+ `acr-pull` Secret；清单已含 ACR 镜像（9.5） |
 | 4 | `PUBLIC_IP=x.x.x.x bash tools/cloud/patch-base-url.sh`；安全组 30080 |
 | 5 | `bash tools/cloud/deploy-monitoring.sh`；安全组 30090、30300 |
 | 6 | 截图存 `docs/screenshots/`（10.3）；CI 见 9.5 |
 
-开发循环：Compose 改代码 → Git push → CI 推 ACR → `tools/cloud/set-api-image-acr.sh`。
+开发循环：Compose 改代码 → Git push → CI 推 ACR → master 上 `kubectl set image` 更新 api tag（见 9.5）。
 
 ### 9.1 前置条件与安全组
 
@@ -339,29 +339,60 @@ PUBLIC_IP=<master公网IP> bash tools/cloud/patch-base-url.sh
 
 ### 9.5 镜像与 CI/CD
 
-清单中 api 默认为 `docker_cloud_lab:1.0`、`imagePullPolicy: IfNotPresent`。k3s 使用 containerd，需保证 Pod 所在节点 能用到镜像。
+国内 ECS 通常 **无法稳定访问 Docker Hub**。本仓库 `k8s/`、`monitoring/` 中业务与监控镜像已指向 **个人版 ACR（VPC 域名）**，命名空间 **`zhou554_cloudlab`**；K8s 资源仍在命名空间 **`cloudlab` / `monitoring`**（二者不同，正常）。
 
-推荐（与 CI/CD 一体）
+| 用途 | 域名示例 |
+|------|----------|
+| 本机 / GitHub CI **push** | `crpi-6zjjswgvnui3es9q.cn-hangzhou.personal.cr.aliyuncs.com` |
+| 集群 **pull**（与清单 `image:` 一致） | `crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com` |
 
-1. 阿里云 ACR 创建命名空间与仓库（如 `cloudlab/api`）。
-2. GitHub Actions（或其它 CI）在 push 时：`docker build` → `docker push registry.<region>.aliyuncs.com/<ns>/api:<git-sha>`。
-3. 集群内：`kubectl -n cloudlab set image deployment/api api=registry.../api:<tag>`，或将 Deployment 改为带 `imagePullSecrets` 的 ACR 地址并 `rollout restart`。
-4. worker 通过 VPC 内网 访问 ACR，避免公网 Hub 不稳定。
+**节点（每台 master + worker，一次性）**
 
-暂未接 ACR 时（手工）
+1. `/etc/rancher/k3s/registries.yaml`：VPC 域名 + ACR 账号密码（见控制台访问凭证）。
+2. `/etc/rancher/k3s/config.yaml`：`pause-image: <VPC域名>/zhou554_cloudlab/pause:3.10.2`
+3. 重启 `k3s`（worker 为 `k3s-agent`）。
+
+**集群 Secret（master 上）**
+
+`k8s/acr-pull-secret.example.yaml` 中有命令：在 **`cloudlab`** 与 **`monitoring`** 各创建 `acr-pull`，`--docker-server` 必须为 **VPC 域名**（与 Deployment 中 image 主机名一致）。
+
+**部署**
 
 ```bash
-bash tools/cloud/build-api-image.sh
-docker save docker_cloud_lab:1.0 | gzip > api-image.tar.gz
-# 在每个可能调度 api 的节点（含 worker）：
-sudo bash tools/cloud/import-api-on-node.sh /path/to/api-image.tar.gz
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secret.yaml
+kubectl apply -k k8s/
+kubectl apply -k monitoring/
 ```
 
-MySQL / Redis 为公共镜像名；节点无出网时在节点预拉或同样 save/import。
+**GitHub Actions（CI，仅 api）**
 
-GitHub Actions 模板：复制 `.github/workflows/build-push-acr.yml.example` 为 `build-push-acr.yml`，在仓库 Settings 配置 Secrets：`ACR_REGISTRY`、`ACR_NAMESPACE`、`ACR_USERNAME`、`ACR_PASSWORD`。推送 `app/` 变更后 CI 构建推送，再在 master 执行 `API_IMAGE=... bash tools/cloud/set-api-image-acr.sh`。
+复制 `.github/workflows/build-push-acr.yml.example` 为 `build-push-acr.yml`，在 Settings → Secrets 配置：
 
-ACR 私有拉取可参考 `k8s/acr-pull-secret.example.yaml`，在 Deployment 中增加 `imagePullSecrets`。
+| Secret | 示例值 |
+|--------|--------|
+| `ACR_REGISTRY` | `crpi-6zjjswgvnui3es9q.cn-hangzhou.personal.cr.aliyuncs.com` |
+| `ACR_NAMESPACE` | `zhou554_cloudlab` |
+| `ACR_USERNAME` / `ACR_PASSWORD` | ACR 登录凭证 |
+
+推送 `app/` 变更后 CI 构建并 push `.../zhou554_cloudlab/api:<git-sha>`。
+
+**发版更新 api（CD 可自动化此步）**
+
+```bash
+REG_VPC="crpi-6zjjswgvnui3es9q-vpc.cn-hangzhou.personal.cr.aliyuncs.com"
+kubectl -n cloudlab set image deployment/api \
+  api=${REG_VPC}/zhou554_cloudlab/api:<与 CI 相同的 git-sha>
+kubectl -n cloudlab rollout status deployment/api
+```
+
+或修改 `k8s/api-deployment.yaml` 中 api 的 tag → `git pull` → `kubectl apply -k k8s/`。
+
+mysql / redis / 监控镜像 tag 固定，已在清单中指向 ACR；**仅 api** 随 CI 频繁变更 tag。
+
+**无 ACR 时的备选（不推荐）**
+
+各节点 `k3s ctr images import` 离线包；见 `tools/cloud/` 下 build/import 脚本（若存在）。
 
 ### 9.6 多节点与释放后重建
 
@@ -373,7 +404,9 @@ ACR 私有拉取可参考 `k8s/acr-pull-secret.example.yaml`，在 Deployment �
 | 现象 | 可能原因 | 处理建议 |
 |------|----------|----------|
 | `namespaces "cloudlab" not found` | 先 apply Secret | 先 `kubectl apply -f k8s/namespace.yaml` |
-| api `ImagePullBackOff` on worker | 节点无镜像 / 无出网 | 各节点 import 或 ACR + 内网 pull |
+| api `ImagePullBackOff` on worker | 节点无镜像 / 无出网 | ACR VPC pull + `acr-pull`；或各节点 import |
+| Pod 卡在 sandbox / 拉 `docker.io` pause | 未配节点 `pause-image` | 每台节点 ACR pause + `registries.yaml` 后重启 k3s |
+| 401 pull denied | Secret 与 image 域名不一致 | `acr-pull` 的 `--docker-server` 用 VPC 域名 |
 | 公网 curl 超时 | 安全组未放行 30080 | 阿里云安全组入方向添加规则 |
 | 短链仍是 localhost | BASE_URL 未改或未重启 api | patch ConfigMap + `rollout restart deployment/api` |
 | Pod `CreateContainerConfigError` | 缺少 Secret | 先 apply `k8s/secret.yaml` |
@@ -506,7 +539,7 @@ docker_cloud_lab/
 | `patch-base-url.sh` | 设置 `BASE_URL`（环境变量 `PUBLIC_IP`） |
 | `build-api-image.sh` | 构建 `docker_cloud_lab:1.0` |
 | `import-api-on-node.sh` | 当前节点 `k3s ctr images import` |
-| `set-api-image-acr.sh` | Deployment 切换为 ACR 镜像 |
+| （发版） | `kubectl -n cloudlab set image deployment/api api=<VPC>/zhou554_cloudlab/api:<sha>`（见 9.5） |
 | `deploy-monitoring.sh` | `kubectl apply -k monitoring/` |
 
 ## 12. 附录：可选本机 WSL + minikube
