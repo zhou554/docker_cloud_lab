@@ -31,7 +31,7 @@
 - 第 9 节：**主路径** — 阿里云 k3s 多节点部署与 CI/CD
 - 第 10 节：**主路径** — 云上 Prometheus / Grafana / 告警与截图
 - 第 11 节：仓库目录与脚本索引
-- 第 12 节：附录 — 可选本机 minikube（默认跳过）
+- 第 12 节：附录 — 可选本机 minikube
 - 脚本：`tools/cloud/*.sh`；可选 `tools/optional-local-minikube/`
 - 业务实现细节以 `app/main.py` 为准。
 
@@ -272,7 +272,7 @@ tools/cloud/                     # 部署脚本
 
 本章为 **K8s 主路径**。本机仅 Compose 联调，不做本机 K8s 验证。
 
-### 9.0 云上一条龙
+### 9.0 云环境
 
 | 步骤 | 操作 |
 |------|------|
@@ -295,7 +295,7 @@ git clone https://github.com/zhou554/docker_cloud_lab.git
 cd docker_cloud_lab
 ```
 
-安全组入方向（来源建议为你的公网 IP/32）：
+安全组入方向（来源建议为：公网 IP/32）：
 
 | 端口 | 用途 |
 |------|------|
@@ -313,7 +313,7 @@ cp k8s/secret.yaml.example k8s/secret.yaml
 bash tools/cloud/deploy-business.sh
 ```
 
-等价手工命令：
+等价的手工命令：
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
@@ -339,7 +339,7 @@ PUBLIC_IP=<master公网IP> bash tools/cloud/patch-base-url.sh
 
 ### 9.5 镜像与 CI/CD
 
-国内 ECS 通常 **无法稳定访问 Docker Hub**。本仓库 `k8s/`、`monitoring/` 中业务与监控镜像已指向 **个人版 ACR（VPC 域名）**，命名空间 **`zhou554_cloudlab`**；K8s 资源仍在命名空间 **`cloudlab` / `monitoring`**（二者不同，正常）。
+国内 ECS 通常 **无法稳定访问 Docker Hub**。本仓库 `k8s/`、`monitoring/` 中业务与监控镜像已指向 **个人版 ACR（VPC 域名）**，命名空间 **`zhou554_cloudlab`**；K8s 资源仍在命名空间 **`cloudlab` / `monitoring`**。
 
 | 用途 | 域名示例 |
 |------|----------|
@@ -468,21 +468,21 @@ kubectl -n monitoring get pods,svc -w
 访问示例（将 `PUBLIC_IP` 换成 master 公网 IP）：
 
 ```bash
-PUBLIC_IP=118.31.68.235   # 示例，请替换
+PUBLIC_IP=118.31.68.235   # 仅示例，可以替换
 echo "Prometheus: http://${PUBLIC_IP}:30090/targets"
 echo "Grafana:    http://${PUBLIC_IP}:30300"
 ```
 
 或使用 `bash tools/cloud/deploy-monitoring.sh`。
 
-### 10.3 截图清单（投简历前）
+### 10.3 截图清单
 
 在云集群完成（公网 IP 为 master 公网地址）：
 
 1. `kubectl -n monitoring get pods` 全部 Running
 2. Prometheus → Status → Targets：`cloudlab-api` 为 UP — `http://<公网IP>:30090/targets`
 3. Grafana → Dashboards → CloudLab Overview：`app_up` / `mysql_up` / `redis_up` 为 1 — `http://<公网IP>:30300`
-4. （可选告警）临时缩容 api 或 mysql，约 1 分钟后 Alerts 为 FIRING，截完立刻恢复：
+4. 临时缩容 api 或 mysql，约 1 分钟后 Alerts 为 FIRING，截完立刻恢复：
 
 ```bash
 kubectl -n cloudlab scale deployment/api --replicas=0
@@ -490,7 +490,7 @@ kubectl -n cloudlab scale deployment/api --replicas=0
 kubectl -n cloudlab scale deployment/api --replicas=1
 ```
 
-下列截图已归档到 `docs/screenshots/`（**勿提交密钥 / ACR 密码**）。入口：`http://<公网IP>:30090` / `:30300`（勿用 localhost）。
+下列截图已归档到 `docs/screenshots/`。入口：`http://<公网IP>:30090` / `:30300`。
 
 | 文件 | 内容 |
 |------|------|
@@ -533,7 +533,7 @@ kubectl delete -k monitoring/
 | Grafana 看板无数据 | 等 1～2 个 scrape 周期；先看 Prometheus Targets |
 | 浏览器打不开 30090 / 30300 | 检查安全组与公网 IP；勿用 localhost |
 | 监控 Pod ImagePullBackOff | 节点预拉监控镜像或配置镜像加速 / import |
-| node-exporter 指标为空 | 部分环境 hostPath 受限；业务 `app_up` 仍可截图，Node 图可后补 |
+
 
 ## 11. 仓库目录与脚本
 
@@ -559,10 +559,3 @@ docker_cloud_lab/
 | （发版） | `kubectl -n cloudlab set image deployment/api api=<VPC>/zhou554_cloudlab/api:<sha>`（见 9.5） |
 | `deploy-monitoring.sh` | `kubectl apply -k monitoring/` |
 
-## 12. 附录：可选本机 WSL + minikube
-
-**默认跳过。** 仅在无云资源、想对照清单时使用。
-
-1. WSL 内执行 `docker context use default`（**勿用** `desktop-linux`，否则会 `protocol not available`）。
-2. 脚本目录：`tools/optional-local-minikube/`（`export-k8s-images.ps1` + `load-k8s-images-wsl.sh`）。
-3. **不要**使用 `eval $(minikube docker-env)` 在 minikube 内 build；Compose 与 K8s 对照见第 8 节。
