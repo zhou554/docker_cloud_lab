@@ -15,6 +15,11 @@ spec:
       labels:
         app: prometheus
     spec:
+      # worker 无公网，监控控制面固定调度到 master
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+      imagePullSecrets:
+        - name: acr-pull
       serviceAccountName: prometheus
       containers:
         - name: prometheus

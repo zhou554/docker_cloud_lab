@@ -17,6 +17,9 @@ spec:
       labels:
         app: mysql
     spec:
+      # worker 无公网；PVC 必须落在能跑 local-path helper 的 master 上
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       imagePullSecrets:
         - name: acr-pull
       containers:

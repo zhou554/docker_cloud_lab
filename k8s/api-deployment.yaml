@@ -19,6 +19,9 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
+      # worker 无公网，业务固定调度到 master
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       imagePullSecrets:
         - name: acr-pull
       containers:
